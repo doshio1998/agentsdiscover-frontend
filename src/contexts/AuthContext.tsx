@@ -43,10 +43,19 @@ interface AuthProviderProps {
   children: ReactNode;
 }
 
+// DEV BYPASS: backend not implemented yet — start with a mock signed-in user
+// so the app is browseable without an OAuth flow. Remove once the backend is wired up.
+const DEV_BYPASS_AUTH = true;
+const MOCK_USER: User = {
+  id: 'dev-user',
+  email: 'dev@agentsdiscover.local',
+  name: 'Dev User',
+};
+
 export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
-  const [user, setUser] = useState<User | null>(null);
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [loading, setLoading] = useState(true);
+  const [user, setUser] = useState<User | null>(DEV_BYPASS_AUTH ? MOCK_USER : null);
+  const [isAuthenticated, setIsAuthenticated] = useState(DEV_BYPASS_AUTH);
+  const [loading, setLoading] = useState(!DEV_BYPASS_AUTH);
 
   const TOKEN_KEY = 'app:jwt';
 
@@ -114,6 +123,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   };
 
   useEffect(() => {
+    if (DEV_BYPASS_AUTH) return;
+
     const handleOAuthCallback = (): boolean => {
       const urlParams = new URLSearchParams(window.location.search);
       const token = urlParams.get('token');
