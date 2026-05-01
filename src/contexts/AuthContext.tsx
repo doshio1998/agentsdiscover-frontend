@@ -114,6 +114,18 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   };
 
   useEffect(() => {
+    if (process.env.NEXT_PUBLIC_MOCK_AUTH === 'true') {
+      setUser({
+        id: 'mock-user-1',
+        email: 'demo@agentsdiscover.dev',
+        name: 'Demo User',
+        avatarUrl: 'https://api.dicebear.com/7.x/initials/svg?seed=Demo%20User',
+      });
+      setIsAuthenticated(true);
+      setLoading(false);
+      return;
+    }
+
     const handleOAuthCallback = (): boolean => {
       const urlParams = new URLSearchParams(window.location.search);
       const token = urlParams.get('token');
