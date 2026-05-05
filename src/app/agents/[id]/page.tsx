@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { cookies } from 'next/headers';
 import { notFound } from 'next/navigation';
 import {
   ChevronRight,
@@ -10,11 +11,14 @@ import {
 } from 'lucide-react';
 import Navbar from '@/components/Navbar';
 import Stars from '@/components/Stars';
-import { AGENTS, getAgent, getReviewsForAgent } from '@/data/mockAgents';
+import { createClient } from '@/utils/supabase/server';
+import { mapAgent, mapReview } from '@/lib/agents';
 
-export function generateStaticParams() {
-  return AGENTS.map((a) => ({ id: a.id }));
-}
+const AGENT_SELECT =
+  'id, slug, name, vendor, tagline, description, websiteUrl, agentType, pricingNotes, capabilities, ratingAvg, ratingCount';
+
+const REVIEW_SELECT =
+  'id, agentId, ratingOverall, verdict, upvoteCount, createdAt, user:users(name)';
 
 export default async function AgentDetailPage({
   params,
@@ -22,10 +26,28 @@ export default async function AgentDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const agent = getAgent(id);
-  if (!agent) notFound();
+  const cookieStore = await cookies();
+  const supabase = createClient(cookieStore);
 
-  const reviews = getReviewsForAgent(id);
+  const { data: agentRow } = await supabase
+    .from('agents')
+    .select(AGENT_SELECT)
+    .eq('slug', id)
+    .eq('isPublished', true)
+    .maybeSingle();
+
+  if (!agentRow) notFound();
+  const agent = mapAgent(agentRow);
+
+  const { data: reviewRows } = await supabase
+    .from('reviews')
+    .select(REVIEW_SELECT)
+    .eq('agentId', agentRow.id)
+    .neq('status', 'removed')
+    .order('upvoteCount', { ascending: false });
+
+  const reviews = (reviewRows ?? []).map((r) => mapReview(r as unknown as Parameters<typeof mapReview>[0]));
+
   const breakdown = [5, 4, 3, 2, 1].map((star) => ({
     star,
     count: reviews.filter((r) => r.rating === star).length,
@@ -117,24 +139,26 @@ export default async function AgentDetailPage({
               </p>
             </section>
 
-            <section>
-              <h2 className="text-2xl md:text-3xl font-bold tracking-tight text-[var(--color-foreground)] mb-4">
-                Capabilities
-              </h2>
-              <ul className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                {agent.capabilities.map((cap) => (
-                  <li
-                    key={cap}
-                    className="flex items-center gap-3 bg-white rounded-xl border-2 border-[var(--color-border)] px-4 py-3"
-                  >
-                    <span className="w-7 h-7 rounded-lg bg-[var(--color-primary)] text-white flex items-center justify-center shrink-0">
-                      <Check size={16} strokeWidth={3} />
-                    </span>
-                    <span className="font-semibold text-[var(--color-foreground)]">{cap}</span>
-                  </li>
-                ))}
-              </ul>
-            </section>
+            {agent.capabilities.length > 0 && (
+              <section>
+                <h2 className="text-2xl md:text-3xl font-bold tracking-tight text-[var(--color-foreground)] mb-4">
+                  Capabilities
+                </h2>
+                <ul className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {agent.capabilities.map((cap) => (
+                    <li
+                      key={cap}
+                      className="flex items-center gap-3 bg-white rounded-xl border-2 border-[var(--color-border)] px-4 py-3"
+                    >
+                      <span className="w-7 h-7 rounded-lg bg-[var(--color-primary)] text-white flex items-center justify-center shrink-0">
+                        <Check size={16} strokeWidth={3} />
+                      </span>
+                      <span className="font-semibold text-[var(--color-foreground)]">{cap}</span>
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            )}
 
             <section>
               <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
@@ -217,10 +241,12 @@ export default async function AgentDetailPage({
               </div>
 
               <div className="mt-6 pt-6 border-t border-white/10 space-y-3 text-sm">
-                <div className="flex justify-between">
-                  <span className="text-white/70">Pricing</span>
-                  <span className="font-semibold">{agent.pricing}</span>
-                </div>
+                {agent.pricing && (
+                  <div className="flex justify-between">
+                    <span className="text-white/70">Pricing</span>
+                    <span className="font-semibold">{agent.pricing}</span>
+                  </div>
+                )}
                 <div className="flex justify-between">
                   <span className="text-white/70">Vendor</span>
                   <span className="font-semibold">{agent.vendor}</span>

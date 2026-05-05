@@ -1,6 +1,5 @@
-'use client';
-
 import Link from 'next/link';
+import { cookies } from 'next/headers';
 import {
   Search,
   Code,
@@ -12,24 +11,61 @@ import {
   Users,
   Sparkles,
   ArrowRight,
+  LucideIcon,
 } from 'lucide-react';
 import Navbar from '@/components/Navbar';
 import AgentCard from '@/components/AgentCard';
-import { AGENTS, CATEGORIES, STATS } from '@/data/mockAgents';
+import { createClient } from '@/utils/supabase/server';
+import { mapAgent } from '@/lib/agents';
 
-const ICONS = {
-  Code,
-  Search,
-  PenLine,
-  Image: ImageIcon,
-  Mic,
-  Workflow,
-} as const;
+const ICONS: Record<string, LucideIcon> = {
+  coding: Code,
+  research: Search,
+  writing: PenLine,
+  image: ImageIcon,
+  voice: Mic,
+  automation: Workflow,
+};
 
 const POPULAR_SEARCHES = ['coding agent', 'research', 'voice clone', 'browser automation', 'image gen'];
 
-export default function HomePage() {
-  const featured = [...AGENTS].sort((a, b) => b.rating - a.rating).slice(0, 6);
+const CATEGORY_BLURBS_FALLBACK: Record<string, string> = {
+  coding: 'IDEs, code review, autonomous SWE',
+  research: 'Citations, summarization, deep dives',
+  writing: 'Drafting, editing, marketing copy',
+  image: 'Generation, editing, vision',
+  voice: 'TTS, transcription, agents',
+  automation: 'Workflows, browser, scheduling',
+};
+
+export default async function HomePage() {
+  const cookieStore = await cookies();
+  const supabase = createClient(cookieStore);
+
+  const [{ data: agentRows }, { data: useCaseRows }] = await Promise.all([
+    supabase
+      .from('agents')
+      .select(
+        'id, slug, name, vendor, tagline, description, websiteUrl, agentType, pricingNotes, capabilities, ratingAvg, ratingCount'
+      )
+      .eq('isPublished', true)
+      .order('ratingAvg', { ascending: false }),
+    supabase
+      .from('use_cases')
+      .select('slug, name, description')
+      .eq('isPublished', true)
+      .order('sortOrder'),
+  ]);
+
+  const agents = (agentRows ?? []).map(mapAgent);
+  const featured = agents.slice(0, 6);
+  const categories = useCaseRows ?? [];
+
+  const stats = {
+    agents: agents.length,
+    reviews: agents.reduce((s, a) => s + a.reviewCount, 0),
+    reviewers: 12_438,
+  };
 
   return (
     <div className="min-h-screen">
@@ -49,7 +85,7 @@ export default function HomePage() {
         <div className="relative max-w-5xl mx-auto px-6 py-24 md:py-32 text-center">
           <span className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-widest px-3 py-1.5 rounded-full bg-white border-2 border-[var(--color-border)] text-[var(--color-foreground)] mb-8">
             <Sparkles size={14} className="text-[var(--color-accent)]" />
-            {STATS.reviews.toLocaleString()} verified reviews
+            {stats.reviews.toLocaleString()} verified reviews
           </span>
           <h1 className="text-5xl md:text-7xl font-bold leading-[1.05] tracking-tight text-[var(--color-foreground)] mb-6">
             Find AI agents that{' '}
@@ -62,14 +98,11 @@ export default function HomePage() {
             </span>
           </h1>
           <p className="text-lg md:text-xl text-[var(--color-text-muted)] max-w-2xl mx-auto mb-10">
-            Real reviews from real users. Browse {STATS.agents}+ agents across coding, research,
+            Real reviews from real users. Browse {stats.agents}+ agents across coding, research,
             writing, voice, and automation.
           </p>
 
-          <form
-            onSubmit={(e) => e.preventDefault()}
-            className="max-w-2xl mx-auto flex items-stretch gap-2 bg-white border-2 border-[var(--color-foreground)] rounded-2xl p-2 shadow-[0_8px_0_0_var(--color-foreground)]"
-          >
+          <div className="max-w-2xl mx-auto flex items-stretch gap-2 bg-white border-2 border-[var(--color-foreground)] rounded-2xl p-2 shadow-[0_8px_0_0_var(--color-foreground)]">
             <div className="flex items-center pl-4 text-[var(--color-text-muted)]">
               <Search size={22} />
             </div>
@@ -79,12 +112,12 @@ export default function HomePage() {
               className="flex-1 bg-transparent px-3 py-3 text-base outline-none placeholder:text-[var(--color-text-muted)]"
             />
             <button
-              type="submit"
+              type="button"
               className="px-6 py-3 rounded-xl bg-[var(--color-primary)] text-white font-bold hover:bg-[var(--color-foreground)] transition-colors"
             >
               Search
             </button>
-          </form>
+          </div>
 
           <div className="mt-6 flex flex-wrap items-center justify-center gap-2">
             <span className="text-xs font-medium text-[var(--color-text-muted)] mr-1">
@@ -111,14 +144,15 @@ export default function HomePage() {
               Browse by category
             </h2>
             <p className="text-[var(--color-text-muted)] text-lg">
-              Six categories. Hundreds of agents. Real opinions.
+              {categories.length} categories. Hundreds of agents. Real opinions.
             </p>
           </div>
         </div>
 
         <div className="grid grid-cols-2 md:grid-cols-3 gap-6 md:gap-8">
-          {CATEGORIES.map((cat) => {
-            const Icon = ICONS[cat.iconName];
+          {categories.map((cat) => {
+            const Icon = ICONS[cat.slug] ?? Sparkles;
+            const blurb = cat.description || CATEGORY_BLURBS_FALLBACK[cat.slug] || '';
             return (
               <Link
                 key={cat.slug}
@@ -136,10 +170,10 @@ export default function HomePage() {
                   {cat.name}
                 </h3>
                 <p className="text-sm text-[var(--color-text-muted)] group-hover:text-white/80 mb-4 transition-colors">
-                  {cat.blurb}
+                  {blurb}
                 </p>
                 <span className="inline-flex items-center gap-1 text-sm font-semibold text-[var(--color-primary)] group-hover:text-[var(--color-accent)] transition-colors">
-                  {cat.count} agents
+                  Explore
                   <ArrowRight size={16} />
                 </span>
               </Link>
@@ -180,9 +214,9 @@ export default function HomePage() {
       <section className="max-w-7xl mx-auto px-6 py-24">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
           {[
-            { icon: Users, value: STATS.reviewers.toLocaleString(), label: 'Reviewers' },
-            { icon: Sparkles, value: STATS.agents.toString(), label: 'Agents listed' },
-            { icon: ShieldCheck, value: STATS.reviews.toLocaleString(), label: 'Verified reviews' },
+            { icon: Users, value: stats.reviewers.toLocaleString(), label: 'Reviewers' },
+            { icon: Sparkles, value: stats.agents.toString(), label: 'Agents listed' },
+            { icon: ShieldCheck, value: stats.reviews.toLocaleString(), label: 'Verified reviews' },
           ].map((stat) => {
             const Icon = stat.icon;
             return (

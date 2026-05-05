@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { ArrowUpRight } from 'lucide-react';
 import Stars from './Stars';
-import type { Agent } from '@/data/mockAgents';
+import type { Agent } from '@/lib/agents';
 
 export default function AgentCard({ agent }: { agent: Agent }) {
   return (
